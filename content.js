@@ -6,8 +6,7 @@ class ContentExtractor {
   }
 
   extractSlideContent() {
-    // For Google Slides
-    const lectureRecordings = document.querySelector('.d2l-navigation-ib-item[title="Lecture Recordings"]');
+    
     if (window.location.hostname.includes('docs.google.com')) {
       const slides = document.querySelectorAll('.slide-content');
       slides.forEach((slide, index) => {
@@ -21,7 +20,8 @@ class ContentExtractor {
   }
 
   extractTranscriptContent() {
-    // For video transcripts (example for Zoom)
+    const lectureRecordings = document.querySelector('.d2l-navigation-ib-item[title="Lecture Recordings"]');
+    console.log(lectureRecordings);
     if (window.location.hostname.includes('zoom.us')) {
       const transcriptElements = document.querySelectorAll('.transcript-content');
       transcriptElements.forEach((element, index) => {
@@ -69,7 +69,20 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     sendResponse({success: true});
   } else if (request.action === 'search') {
     const results = extractor.search(request.keyword);
-    sendResponse({results: results});
+    sendResponse({
+      results: {
+        slides: results.slides || [],
+        transcripts: results.transcripts || []
+      }
+    });
+  } else {
+    // Always send a response, even for unknown actions
+    sendResponse({
+      results: {
+        slides: [],
+        transcripts: []
+      }
+    });
   }
-  return true;
+  return true;  // Required to use sendResponse asynchronously
 }); 

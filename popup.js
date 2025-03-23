@@ -31,19 +31,37 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 
   function performSearch(keyword) {
-    
     chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
+      // Check if we're on a supported page
+      const url = tabs[0].url;
+      if (!url.includes('docs.google.com') && !url.includes('zoom.us')) {
+        displayError('This extension only works on Google Slides and Zoom pages.');
+        return;
+      }
+      
       chrome.tabs.sendMessage(tabs[0].id, {
         action: 'search',
         keyword: keyword
       }, function(response) {
-        displayResults(response.results);
+        // Add error handling
+        if (!response) {
+          console.error('No response from content script');
+          displayError('Unable to search content. Please refresh the page and try again.');
+          return;
+        }
+        
+        const results = response.results || { slides: [], transcripts: [] };
+        displayResults(results);
       });
     });
   }
 
-  function displayResults(results) {
+  function displayResults(results = { slides: [], transcripts: [] }) {
     resultsDiv.innerHTML = '';
+    
+    // Ensure results object has required properties
+    results.slides = results.slides || [];
+    results.transcripts = results.transcripts || [];
     
     // Check if there are no results at all
     if (!results.slides.length && !results.transcripts.length) {
@@ -97,5 +115,14 @@ document.addEventListener('DOMContentLoaded', function() {
     // Convert timestamp to readable format
     const date = new Date(timestamp * 1000);
     return date.toISOString().substr(11, 8);
+  }
+
+  // Add this new function to handle errors
+  function displayError(message) {
+    resultsDiv.innerHTML = `
+        <div class="error-message">
+            <p>${message}</p>
+        </div>
+    `;
   }
 }); 
