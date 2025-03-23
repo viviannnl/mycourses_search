@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Slides & Recordings Search</title>
+  <style>
+    body {
+      width: 300px;
+      padding: 10px;
+    }
+    .search-container {
+      margin-bottom: 10px;
+      display: flex;
+      gap: 5px;
+    }
+    #searchInput {
+      flex: 1;
+      padding: 5px;
+    }
+    #results {
+      max-height: 400px;
+      overflow-y: auto;
+    }
+    .no-results {
+        text-align: center;
+        color: #666;
+        padding: 20px;
+        font-style: italic;
+    }
+  </style>
+</head>
+<body>
+  <div class="search-container">
+    <input type="text" id="searchInput" placeholder="Search slides and recordings...">
+  </div>
+  <div id="results"></div>
+  <script src="popup.js"></script>
+</body>
+</html> 
