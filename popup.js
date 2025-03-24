@@ -5,10 +5,34 @@ document.addEventListener('DOMContentLoaded', function() {
   const downloadButton = document.getElementById('downloadButton');
   const resultsDiv = document.getElementById('results');
   let currentTranscript = null; // Store the current transcript
+  let currentMessageListener = null; // Track the current listener
+  let processingTabId = null; // Track the processing tab ID
 
   // Add initial message to confirm script is loading
   console.log('Popup script loaded');
   resultsDiv.textContent = 'Ready to search...';
+
+  // Function to enable/disable search button
+  const disableSearchButtonState = (disabled) => {
+    searchButton.disabled = disabled;
+    searchButton.style.opacity = disabled ? '0.5' : '1';
+    searchButton.style.cursor = disabled ? 'not-allowed' : 'pointer';
+  };
+
+  chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+    if (request.action === "processingTabCreated") {
+      processingTabId = request.tabId;
+      disableSearchButtonState(true); // Disable the search button
+    }
+  });
+
+  // Listen for tab removal
+  chrome.tabs.onRemoved.addListener((tabId) => {
+    if (tabId === processingTabId) {
+      processingTabId = null;
+      disableSearchButtonState(false); // Re-enable the search button
+    }
+  });
 
   // Handle transcript download
   downloadButton.addEventListener('click', () => {
@@ -41,14 +65,64 @@ document.addEventListener('DOMContentLoaded', function() {
       return;
     }
 
+    // Disable search button
+    disableSearchButtonState(true);
+
+    // Remove any existing message listener
+    if (currentMessageListener) {
+      chrome.runtime.onMessage.removeListener(currentMessageListener);
+    }
+
     // Show loading state
-    resultsDiv.innerHTML = '<div>Loading transcript...</div>';
-    downloadButton.style.display = 'none'; // Hide download button while loading
-    
+    resultsDiv.innerHTML = `<div class="loading">Searching for recording on ${selectedDate}...</div>`;
+    downloadButton.style.display = 'none';
+
     try {
       const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
       
-      // Send initial message
+      // Create new message listener for this search
+      currentMessageListener = function(message) {
+        if (message.action === "transcriptFound") {
+          console.log('Transcript found:', message);
+          if (message.transcript && message.transcript.length > 0) {
+            currentTranscript = message;
+            const transcriptHtml = message.transcript
+              .map(text => `<p>${text}</p>`)
+              .join('');
+            resultsDiv.innerHTML = `
+              <h3>Transcript for ${selectedDate}</h3>
+              <div class="transcript-content">${transcriptHtml}</div>
+            `;
+            downloadButton.style.display = 'block';
+          } else {
+            resultsDiv.innerHTML = `
+              <div class="no-results">
+                <p>No transcript found for ${selectedDate}</p>
+                <p>The recording might exist but has no transcript available.</p>
+              </div>
+            `;
+            downloadButton.style.display = 'none';
+          }
+        } else if (message.action === "searchError" || message.action === "noTranscriptFound") {
+          resultsDiv.innerHTML = `
+            <div class="error-message">
+              <p>No recording found for ${selectedDate}</p>
+              <p>Please make sure:</p>
+              <ul>
+                <li>The date is correct</li>
+                <li>You're on the right course page</li>
+                <li>A recording exists for this date</li>
+              </ul>
+            </div>
+          `;
+          downloadButton.style.display = 'none';
+        }
+      };
+
+      // Add the new listener
+      chrome.runtime.onMessage.addListener(currentMessageListener);
+
+      // Send the search message
       chrome.tabs.sendMessage(tab.id, {
         action: "searchOne",
         url: tab.url,
@@ -57,56 +131,28 @@ document.addEventListener('DOMContentLoaded', function() {
       }, (response) => {
         if (chrome.runtime.lastError) {
           console.error(chrome.runtime.lastError);
-          resultsDiv.innerHTML = '<div class="error-message">Error: Could not connect to page</div>';
+          resultsDiv.innerHTML = `
+            <div class="error-message">
+              <p>Error: Could not connect to page</p>
+              <p>Please make sure you're on the Lecture Recordings page</p>
+            </div>`;
+          disableSearchButtonState(false); // Re-enable on error
           return;
         }
-        // Initial response received, now wait for the actual transcript
         console.log('Search started:', response);
       });
 
       window.focus();
 
-      // Listen for the transcript or error
-      chrome.runtime.onMessage.addListener(function transcriptListener(message) {
-        if (message.action === "transcriptFound") {
-          console.log('Transcript found:', message);
-          chrome.runtime.onMessage.removeListener(transcriptListener);
-          if (message.transcript && message.transcript.length > 0) {
-            currentTranscript = message; // Store the current transcript
-            const transcriptHtml = message.transcript
-              .map(text => `<p>${text}</p>`)
-              .join('');
-            resultsDiv.innerHTML = `
-              <h3>Transcript for ${message.date}</h3>
-              <div class="transcript-content">${transcriptHtml}</div>
-            `;
-            downloadButton.style.display = 'block'; // Show download button
-          } else {
-            resultsDiv.innerHTML = `
-              <div class="no-results">No transcript found for ${selectedDate}</div>
-            `;
-            downloadButton.style.display = 'none'; // Hide download button
-          }
-        } else if (message.action === "noTranscriptFound") {
-          chrome.runtime.onMessage.removeListener(transcriptListener);
-          resultsDiv.innerHTML = `
-            <div class="no-results">No recording found for ${message.date}</div>
-          `;
-          downloadButton.style.display = 'none'; // Hide download button
-        } else if (message.action === "searchError") {
-            chrome.runtime.onMessage.removeListener(transcriptListener);
-            resultsDiv.innerHTML = `
-              <div class="error-message">Error: ${message.error}</div>
-            `;
-            downloadButton.style.display = 'none'; // Hide download button
-        } 
-      });
-
     } catch (error) {
       resultsDiv.innerHTML = `
-        <div class="error-message">Error: ${error.message}</div>
+        <div class="error-message">
+          <p>Error: ${error.message}</p>
+          <p>Please try again or refresh the page.</p>
+        </div>
       `;
-      downloadButton.style.display = 'none'; // Hide download button
+      downloadButton.style.display = 'none';
+      disableSearchButtonState(false); // Re-enable on error
     }
   });
 

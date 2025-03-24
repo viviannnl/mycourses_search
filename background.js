@@ -24,8 +24,6 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     }
 });
 
-
-
 function scrapeDataFromTab(targetUrl, page, date) {
     chrome.tabs.query({ url: targetUrl }, (tabs) => {
         if (tabs.length > 0) {
@@ -37,6 +35,12 @@ function scrapeDataFromTab(targetUrl, page, date) {
             }
         } else {
             chrome.tabs.create({ url: targetUrl, active: false }, (tab) => {
+                // Send the tab ID to the popup
+                chrome.runtime.sendMessage({ 
+                    action: "processingTabCreated", 
+                    tabId: tab.id 
+                });
+
                 chrome.tabs.onUpdated.addListener(function listener(tabId, changeInfo) {
                     if (tabId === tab.id && changeInfo.status === "complete") {
                         chrome.tabs.onUpdated.removeListener(listener);
@@ -45,10 +49,16 @@ function scrapeDataFromTab(targetUrl, page, date) {
                             if (page === "content") {
                                 injectScraperScriptContent(tab.id);
                             } else if (page === "recordings") {
-                                //console.log("In background.js, Injecting scraper script for recordings:", tab.id, date);
-                                injectScraperScriptRecordings(tab.id, date);
+                                injectScraperScriptRecordings(tab.id, date).then(() => {
+                                    setTimeout(() => {
+                                        chrome.tabs.remove(tab.id);
+                                    }, 6000);
+                                }).catch(error => {
+                                    console.error('Error:', error);
+                                    chrome.tabs.remove(tab.id);
+                                });
                             }
-                        }, 5000);
+                        }, 6000);
                     }
                 });
             });
@@ -87,7 +97,7 @@ async function injectScraperScriptRecordings(tabId, targetDate) {
             //console.log("Injected into:", document.location.href);
             
             // Helper function to wait for element to appear
-            const waitForElement = async (selector, timeout = 30000) => {
+            const waitForElement = async (selector, timeout = 5000) => {
                 const startTime = Date.now();
                 while (Date.now() - startTime < timeout) {
                     const element = document.querySelector(selector);
@@ -123,7 +133,18 @@ async function injectScraperScriptRecordings(tabId, targetDate) {
                         
                         videoThumb.click();
                         
-                        await waitForElement('.v-list-item.theme--light');
+                        try {
+                            await waitForElement('.v-list-item.theme--light');
+                        } catch (error) {
+                            console.error("Error waiting for element:", error);
+                            chrome.runtime.sendMessage({
+                                action: "noTranscriptFound",
+                                date: targetDate
+                            });
+                            if (targetDate) {
+                                break;
+                            }
+                        }
                         await new Promise(resolve => setTimeout(resolve, 2000));
                         
                         let transcript = [];

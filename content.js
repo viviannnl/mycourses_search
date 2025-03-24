@@ -77,8 +77,8 @@ class ContentExtractor {
   }
 }
 
-// Initialize content extractor
 const extractor = new ContentExtractor();
+
 // Listen for messages from popup
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   console.log('In content.js, received message:', request);
@@ -96,7 +96,6 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   } else if (request.action === 'searchOne') {
     console.log('In content.js, Searching for one recording:', request.date);
     extractor.grabOneRecording(request.date);
-
     sendResponse({
       results: {}
     });
