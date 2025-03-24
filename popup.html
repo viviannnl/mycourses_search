@@ -8,13 +8,39 @@
       padding: 10px;
     }
     .search-container {
-      margin-bottom: 10px;
-      display: flex;
-      gap: 5px;
+      margin-bottom: 15px;
     }
-    #searchInput {
-      flex: 1;
-      padding: 5px;
+    input {
+      width: 100%;
+      padding: 8px;
+      margin-bottom: 10px;
+      box-sizing: border-box;
+    }
+    button {
+      width: 100%;
+      padding: 8px;
+      background-color: #4CAF50;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      margin-bottom: 10px;
+    }
+    button:hover {
+      background-color: #45a049;
+    }
+    #downloadButton {
+      background-color: #2196F3;
+      display: none; /* Hidden by default */
+    }
+    #downloadButton:hover {
+      background-color: #1976D2;
+    }
+    .error-message {
+      color: red;
+      padding: 10px;
+      background-color: #ffe6e6;
+      border-radius: 4px;
     }
     #results {
       max-height: 400px;
@@ -26,19 +52,41 @@
         padding: 20px;
         font-style: italic;
     }
-    .error-message {
-        color: #d32f2f;
+    .transcript-content {
+        max-height: 300px;
+        overflow-y: auto;
         padding: 10px;
-        text-align: center;
-        background-color: #ffebee;
+        background-color: #f5f5f5;
         border-radius: 4px;
-        margin: 10px 0;
+        margin-top: 10px;
+    }
+    
+    .transcript-content p {
+        margin: 5px 0;
+        padding: 5px;
+        border-bottom: 1px solid #eee;
+    }
+    
+    h3 {
+        margin-top: 0;
+        color: #333;
+    }
+    
+    .loading {
+        text-align: center;
+        padding: 20px;
+        color: #666;
     }
   </style>
 </head>
 <body>
   <div class="search-container">
-    <input type="text" id="searchInput" placeholder="Search slides and recordings...">
+    <input type="text" id="searchInput" placeholder="Search in slides and recordings...">
+    
+    <!-- Add date input and search button -->
+    <input type="date" id="dateInput" placeholder="Select date">
+    <button id="searchButton">Search Recording by Date</button>
+    <button id="downloadButton">Download Transcript</button>
   </div>
   <div id="results"></div>
   <script src="popup.js"></script>

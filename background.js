@@ -17,103 +17,149 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     }
 });
 
-function scrapeDataFromTab(targetUrl, page) {
-    // Find or open the tab with the given URL
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+    if (request.action === "scrapeOnePage") {
+        console.log("In background.js, Scraping one page:", request.url, request.page, request.date);
+        scrapeDataFromTab(request.url, request.page, request.date);
+    }
+});
+
+
+
+function scrapeDataFromTab(targetUrl, page, date) {
     chrome.tabs.query({ url: targetUrl }, (tabs) => {
         if (tabs.length > 0) {
-        // Use the existing tab
-        const tabId = tabs[0].id;
-        injectScraperScript(tabId);
-        } else {
-        // Open a new tab and scrape after it loads
-        chrome.tabs.create({ url: targetUrl }, (tab) => {
-            chrome.tabs.onUpdated.addListener(function listener(tabId, changeInfo) {
-            if (tabId === tab.id && changeInfo.status === "complete") {
-                chrome.tabs.onUpdated.removeListener(listener);
-                setTimeout(() => {
-                    console.log("Waiting for content...");
-                    if (page === "content") {
-                        injectScraperScriptContent(tab.id);
-                    } else if (page === "recordings") {
-                        injectScraperScriptRecordings(tab.id);
-                    }
-                }, 5000); // Adjust timing as needed
+            const tabId = tabs[0].id;
+            if (page === "recordings") {
+                injectScraperScriptRecordings(tabId, date);
+            } else {
+                injectScraperScriptContent(tabId);
             }
+        } else {
+            chrome.tabs.create({ url: targetUrl, active: false }, (tab) => {
+                chrome.tabs.onUpdated.addListener(function listener(tabId, changeInfo) {
+                    if (tabId === tab.id && changeInfo.status === "complete") {
+                        chrome.tabs.onUpdated.removeListener(listener);
+                        setTimeout(() => {
+                            console.log("Waiting for content...");
+                            if (page === "content") {
+                                injectScraperScriptContent(tab.id);
+                            } else if (page === "recordings") {
+                                //console.log("In background.js, Injecting scraper script for recordings:", tab.id, date);
+                                injectScraperScriptRecordings(tab.id, date);
+                            }
+                        }, 5000);
+                    }
+                });
             });
-        });
         }
     });
 }
 
-async function injectScraperScriptRecordings(tabId) {
+function parseRecordingDate(dateStr) {
+    const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    const [year, month, day] = dateStr.split("-").map(Number);
+    
+    // Get the month abbreviation
+    const monthAbbr = months[month - 1];
+
+    // Function to get ordinal suffix (st, nd, rd, th)
+    const getOrdinal = (num) => {
+        if (num >= 11 && num <= 13) return "th";
+        const lastDigit = num % 10;
+        return lastDigit === 1 ? "st" :
+               lastDigit === 2 ? "nd" :
+               lastDigit === 3 ? "rd" : "th";
+    };
+
+    return `${monthAbbr} ${day}${getOrdinal(day)}`;
+}
+
+async function injectScraperScriptRecordings(tabId, targetDate) {
+    //console.log("In background.js:injectScraperScriptRecordings, Injecting scraper script for recordings:", tabId, targetDate);
     chrome.scripting.executeScript({
         target: { 
           tabId: tabId,
           allFrames: true
         },
-        func: async () => {
-            console.log("Injected into:", document.location.href);
+        args: [parseRecordingDate(targetDate).trim()],
+        func: async (targetDate) => {
+            //console.log("Injected into:", document.location.href);
             
             // Helper function to wait for element to appear
             const waitForElement = async (selector, timeout = 30000) => {
                 const startTime = Date.now();
                 while (Date.now() - startTime < timeout) {
                     const element = document.querySelector(selector);
-                    //console.log("from waitForElement:", element);
                     if (element) return element;
                     await new Promise(resolve => setTimeout(resolve, 100));
                 }
                 throw new Error(`Timeout waiting for element: ${selector}`);
             };
 
+            let found = false;
+
             if (document.location.href.includes("lrs")) {
+                //console.log("In background.js, Scraping recordings page:", document.location.href);
                 const navigationContainer = document.body.querySelector('.v-navigation-drawer__content');
                 const cardDivs = document.querySelectorAll('.layout.column > .pa-1.ma-2.v-card.v-sheet.theme--light.elevation-6');
                 
                 for (let i = 0; i < cardDivs.length; i++) {
                     try {
-                        
                         const card = cardDivs[i];
                         const videoThumb = card.querySelector('.videothumb');
                         if (!videoThumb) continue;
                         
-                        // current video date
-                        console.log("Processing video date:", card.querySelector('.recordingdate')?.textContent);
-                        
-                        // Click the video
-                        videoThumb.click();
-                        
-                        // Wait for the video player to load
-                        //await waitForElement('.v-list-item.theme--light');
-                        
-                        // Additional wait to ensure transcript is fully loaded
-                        
-                        //await new Promise(resolve => setTimeout(resolve, 2000));
-                        
-                        // Get all transcript elements
-                        const transcriptElements = document.querySelectorAll('.v-list-item.theme--light');
-                        
-                        //console.log(document);
-                        //console.log("Current video date:", document.querySelector('.recordingdate')?.textContent);
-                        /*
-                        if (currentVideoDate !== videoDate) {
-                            console.log("Transcript mismatch detected, retrying...");
-                            continue;
+                        const recordingDate = card.querySelector('.recordingdate')?.textContent.split(" @")[0].trim();
+                        console.log("In background.js, Recording date:", recordingDate);
+                        if (targetDate) { 
+                            if (recordingDate !== targetDate) {
+                                console.log(`Skipping recording from ${recordingDate}, looking for ${targetDate}`);
+                                continue;
+                            }
+
+                            console.log(`Found matching recording from ${recordingDate}`);
                         }
                         
-                        */
+                        videoThumb.click();
+                        
+                        await waitForElement('.v-list-item.theme--light');
+                        await new Promise(resolve => setTimeout(resolve, 2000));
+                        
                         let transcript = [];
+                        const transcriptContainer = document.querySelectorAll('.v-navigation-drawer__content')[1];
+                        const transcriptElements = transcriptContainer.querySelectorAll('.v-list-item');
+                        //console.log(transcriptElements);
                         transcriptElements.forEach(el => {
                             const content = el.querySelector('.v-list-item__content')?.querySelector('span')?.textContent;
                             if (content) transcript.push(content);
                         });
                         
-                        console.log(`Transcript for Video "${i}":`, transcript);
+                        //console.log(`Transcript for recording on ${recordingDate}:`, transcript);
                         
+                        if (targetDate) {
+                            found = true;
+                            console.log("In background.js, Sending transcript to content.js:", transcript);
+                            chrome.runtime.sendMessage({
+                                action: "transcriptFound",
+                                date: recordingDate,
+                                transcript: transcript
+                            });
+                            
+                            break;
+                        }
                         
                     } catch (error) {
-                        //console.error("Error processing video:", error);
+                        console.error("Error processing video:", error);
                     }
+                }
+
+                if (targetDate && !found) {
+                    console.log("In background.js, No recording found for:", targetDate);
+                    chrome.runtime.sendMessage({
+                        action: "noTranscriptFound",
+                        date: targetDate
+                    });
                 }
             }
         }

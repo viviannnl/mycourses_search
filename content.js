@@ -5,37 +5,8 @@ class ContentExtractor {
     this.slideContent = [];
     this.transcriptContent = [];
   }
-/*
-  extractSlideContent() {
-    
-    if (window.location.hostname.includes('docs.google.com')) {
-      const slides = document.querySelectorAll('.slide-content');
-      slides.forEach((slide, index) => {
-        this.slideContent.push({
-          index: index,
-          content: slide.textContent,
-          url: window.location.href + '#slide=' + (index + 1)
-        });
-      });
-    }
-  }
 
-  extractTranscriptContent() {
-    const lectureRecordings = document.querySelector('.d2l-navigation-ib-item[title="Lecture Recordings"]');
-    console.log(lectureRecordings);
-    if (window.location.hostname.includes('zoom.us')) {
-      const transcriptElements = document.querySelectorAll('.transcript-content');
-      transcriptElements.forEach((element, index) => {
-        this.transcriptContent.push({
-          timestamp: element.getAttribute('data-timestamp'),
-          content: element.textContent,
-          url: window.location.href
-        });
-      });
-    }
-  }
-*/
-  async navigateToContent() {
+  navigateToContent() {
     // Find the Content tab link
     const contentLink = document.querySelector('div[title="Content"] a.d2l-navigation-ib-item-link');
     if (contentLink) {
@@ -45,7 +16,7 @@ class ContentExtractor {
     return null;
   }
 
-  async navigateToRecordings() {
+  navigateToRecordings() {
     // Find the Lecture Recordings tab link
     const recordingsLink = document.querySelector('div[title="Lecture Recordings"] a.d2l-navigation-ib-item-link');
     if (recordingsLink) {
@@ -55,40 +26,30 @@ class ContentExtractor {
     return null;
   }
 
-  async grabContent() {
+  grabContent() {
     // Get URLs for both sections
-    const contentUrl = await this.navigateToContent();
-    const recordingsUrl = await this.navigateToRecordings();
+    const contentUrl = this.navigateToContent();
 
     if (contentUrl) {
-      // We might need to fetch content from this URL
       console.log('Accessing content at:', contentUrl);
-      // grab content from this URL and push it to the slideContent array
-      /*
-      fetch(contentUrl)
-      .then(response => response.text()) // Use `.json()` if expecting JSON
-      .then(data => {
-          console.log("Fetched Content:", data);
-      })
-      .catch(error => console.error("Error fetching content:", error));
-      */
       chrome.runtime.sendMessage({ action: "scrapePage", url: contentUrl, page: "content" });
-      // You might need to handle iframe content or make an XHR request
     }
+  }
 
+  grabRecordings() {
+    const recordingsUrl = this.navigateToRecordings();
     if (recordingsUrl) {
       console.log('Accessing recordings at:', recordingsUrl);
-      // grab content from this URL
-      /*
-      fetch(recordingsUrl)
-        .then(response => response.text()) // Use `.json()` if expecting JSON
-        .then(data => {
-            console.log("Fetched Content:", data);
-        })
-        .catch(error => console.error("Error fetching content:", error));
-      */
       chrome.runtime.sendMessage({ action: "scrapePage", url: recordingsUrl, page: "recordings" });
-      // Similar handling for recordings
+    }
+  }
+
+  grabOneRecording(date) {
+    const recordingsUrl = this.navigateToRecordings();
+    if (recordingsUrl) {
+      chrome.runtime.sendMessage(
+        { action: "scrapeOnePage", url: recordingsUrl, page: "recordings", date: date },
+      );
     }
   }
 
@@ -124,12 +85,20 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === 'search') {
     console.log('In content.js, Searching for:', request.keyword);
     extractor.grabContent();
+    extractor.grabRecordings();
     const results = extractor.search(request.keyword);
     sendResponse({
       results: {
         slides: results.slides || [],
         transcripts: results.transcripts || []
       }
+    });
+  } else if (request.action === 'searchOne') {
+    console.log('In content.js, Searching for one recording:', request.date);
+    extractor.grabOneRecording(request.date);
+
+    sendResponse({
+      results: {}
     });
   } else {
     // Always send a response, even for unknown actions
