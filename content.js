@@ -1,10 +1,11 @@
+console.log('In content.js, starting');
 // Content extractor for slides and recordings
 class ContentExtractor {
   constructor() {
     this.slideContent = [];
     this.transcriptContent = [];
   }
-
+/*
   extractSlideContent() {
     
     if (window.location.hostname.includes('docs.google.com')) {
@@ -31,6 +32,63 @@ class ContentExtractor {
           url: window.location.href
         });
       });
+    }
+  }
+*/
+  async navigateToContent() {
+    // Find the Content tab link
+    const contentLink = document.querySelector('div[title="Content"] a.d2l-navigation-ib-item-link');
+    if (contentLink) {
+      //console.log('Found Content tab:', contentLink.href);
+      return contentLink.href;
+    }
+    return null;
+  }
+
+  async navigateToRecordings() {
+    // Find the Lecture Recordings tab link
+    const recordingsLink = document.querySelector('div[title="Lecture Recordings"] a.d2l-navigation-ib-item-link');
+    if (recordingsLink) {
+      //console.log('Found Recordings tab:', recordingsLink.href);
+      return recordingsLink.href;
+    }
+    return null;
+  }
+
+  async grabContent() {
+    // Get URLs for both sections
+    const contentUrl = await this.navigateToContent();
+    const recordingsUrl = await this.navigateToRecordings();
+
+    if (contentUrl) {
+      // We might need to fetch content from this URL
+      console.log('Accessing content at:', contentUrl);
+      // grab content from this URL and push it to the slideContent array
+      /*
+      fetch(contentUrl)
+      .then(response => response.text()) // Use `.json()` if expecting JSON
+      .then(data => {
+          console.log("Fetched Content:", data);
+      })
+      .catch(error => console.error("Error fetching content:", error));
+      */
+      chrome.runtime.sendMessage({ action: "scrapePage", url: contentUrl, page: "content" });
+      // You might need to handle iframe content or make an XHR request
+    }
+
+    if (recordingsUrl) {
+      console.log('Accessing recordings at:', recordingsUrl);
+      // grab content from this URL
+      /*
+      fetch(recordingsUrl)
+        .then(response => response.text()) // Use `.json()` if expecting JSON
+        .then(data => {
+            console.log("Fetched Content:", data);
+        })
+        .catch(error => console.error("Error fetching content:", error));
+      */
+      chrome.runtime.sendMessage({ action: "scrapePage", url: recordingsUrl, page: "recordings" });
+      // Similar handling for recordings
     }
   }
 
@@ -60,14 +118,12 @@ class ContentExtractor {
 
 // Initialize content extractor
 const extractor = new ContentExtractor();
-
 // Listen for messages from popup
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-  if (request.action === 'extract') {
-    extractor.extractSlideContent();
-    extractor.extractTranscriptContent();
-    sendResponse({success: true});
-  } else if (request.action === 'search') {
+  console.log('In content.js, received message:', request);
+  if (request.action === 'search') {
+    console.log('In content.js, Searching for:', request.keyword);
+    extractor.grabContent();
     const results = extractor.search(request.keyword);
     sendResponse({
       results: {

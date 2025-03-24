@@ -6,11 +6,13 @@
   "permissions": [
     "storage",
     "activeTab",
-    "scripting"
+    "scripting",
+    "tabs"
   ],
   "host_permissions": [
-    "*://*.google.com/*",
-    "*://*.zoom.us/*"
+    "*://*.brightspace.com/*",
+    "*://mycourses2.mcgill.ca/*",
+    "*://*.mcgill.ca/*"
   ],
   "action": {
     "default_popup": "popup.html",
@@ -26,7 +28,7 @@
   },
   "content_scripts": [
     {
-      "matches": ["*://*.google.com/*", "*://*.zoom.us/*"],
+      "matches": ["*://mycourses2.mcgill.ca/*"],
       "js": ["content.js"]
     }
   ],

@@ -34,15 +34,17 @@ document.addEventListener('DOMContentLoaded', function() {
     chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
       // Check if we're on a supported page
       const url = tabs[0].url;
+      /*
       if (!url.includes('docs.google.com') && !url.includes('zoom.us')) {
         displayError('This extension only works on Google Slides and Zoom pages.');
         return;
       }
-      
+      */
       chrome.tabs.sendMessage(tabs[0].id, {
         action: 'search',
         keyword: keyword
       }, function(response) {
+        console.log("Message sent to content script");
         // Add error handling
         if (!response) {
           console.error('No response from content script');
@@ -53,6 +55,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const results = response.results || { slides: [], transcripts: [] };
         displayResults(results);
       });
+
     });
   }
 
