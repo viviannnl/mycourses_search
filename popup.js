@@ -9,7 +9,7 @@ document.addEventListener('DOMContentLoaded', function() {
   let processingTabId = null; // Track the processing tab ID
 
   // Add initial message to confirm script is loading
-  console.log('Popup script loaded');
+  console.log('%c Popup Script Loaded ', 'background: #222; color: #bada55');
   resultsDiv.textContent = 'Ready to search...';
 
   // Function to enable/disable search button
@@ -181,6 +181,7 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 
   function performSearch(keyword) {
+    let transcriptDates = [];
     chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
       // Check if we're on a supported page
       const url = tabs[0].url;
@@ -189,70 +190,188 @@ document.addEventListener('DOMContentLoaded', function() {
         action: 'search',
         keyword: keyword
       }, function(response) {
+        disableSearchButtonState(true); // Disable the search button
         console.log("search: Message sent to content script");
-        // Add error handling
-        if (!response) {
-          console.error('No response from content script');
-          displayError('Unable to search content. Please refresh the page and try again.');
-          return;
+        if (chrome.runtime.lastError) {
+            console.error(chrome.runtime.lastError);
+            resultsDiv.innerHTML = `
+              <div class="error-message">
+                <p>Error: Could not connect to page</p>
+                <p>Please make sure you're on the Lecture Recordings page</p>
+              </div>`;
+            disableSearchButtonState(false); // Re-enable on error
+            return;
         }
+
         
-        const results = response.results || { slides: [], transcripts: [] };
+        chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+            let recordingDates;
+            if (request.action === "recordingDatesGot") {
+                recordingDates = request.dates;
+                console.log("In popup.js, Recording dates:", recordingDates);
+
+                for (let curDate of recordingDates) {
+                    console.log("In popup.js, Searching for date:", curDate);
+                    chrome.tabs.sendMessage(tabs[0].id, {
+                        action: "searchEachDate",
+                        url: tabs[0].url,
+                        page: "recordings",
+                        date: curDate
+                    });
+
+                    if (currentMessageListener) {
+                        chrome.runtime.onMessage.removeListener(currentMessageListener);
+                    }
+                    
+                    currentMessageListener = (request, sender, sendResponse) => {
+                        if (request.action === "transcriptFoundForOneDate") {
+                            console.log("In popup.js, Transcript found for one date:", request.date);
+                            let transcript = request.transcript.join(" ");
+                            console.log(transcript);
+                            if (containsWholeWord(transcript, keyword)) {
+                            transcriptDates.push(curDate);
+                            }
+                        }
+                    };
+
+                    chrome.runtime.onMessage.addListener(currentMessageListener);
+                }
+            }
+
+            
+        });
+        
+        // Add error handling
+        
+        const results = response.results || { slides: [], transcripts: transcriptDates };
         displayResults(results);
+        disableSearchButtonState(false); // Re-enable the search button
       });
 
     });
   }
 
-  function displayResults(results = { slides: [], transcripts: [] }) {
+  function displayResults(results = { slideDates: [], transcriptDates: [] }) {
     resultsDiv.innerHTML = '';
     
-    // Ensure results object has required properties
-    results.slides = results.slides || [];
-    results.transcripts = results.transcripts || [];
-    
-    // Check if there are no results at all
-    if (!results.slides.length && !results.transcripts.length) {
-        const noResultsDiv = document.createElement('div');
-        noResultsDiv.innerHTML = `
-            <p class="no-results">No matches found. Try different search terms.</p>
+    console.log("In popup.js, Results:", results);
+
+    // Format dates nicely
+    const formatDate = (date) => {
+        return new Date(date).toLocaleDateString('en-US', {
+            weekday: 'long',
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric'
+        });
+    };
+
+    // Combine and deduplicate dates
+    const allDates = [...new Set([...results.slideDates, ...results.transcriptDates])];
+
+    if (allDates.length === 0) {
+        resultsDiv.innerHTML = `
+            <div class="no-results">
+                <p>No matches found in any recordings.</p>
+            </div>
         `;
-        resultsDiv.appendChild(noResultsDiv);
         return;
     }
-    
-    if (results.slides.length > 0) {
-      const slidesHeader = document.createElement('h3');
-      slidesHeader.textContent = 'Slides Results';
-      resultsDiv.appendChild(slidesHeader);
-      
-      results.slides.forEach(slide => {
-        const div = document.createElement('div');
-        div.innerHTML = `
-          <p><a href="${slide.url}" target="_blank">Slide ${slide.index + 1}</a></p>
-          <p>${highlight(slide.content, keyword)}</p>
-        `;
-        resultsDiv.appendChild(div);
-      });
-    }
 
-    if (results.transcripts.length > 0) {
-      const transcriptHeader = document.createElement('h3');
-      transcriptHeader.textContent = 'Transcript Results';
-      resultsDiv.appendChild(transcriptHeader);
-      
-      results.transcripts.forEach(transcript => {
-        const div = document.createElement('div');
-        div.innerHTML = `
-          <p><a href="${transcript.url}?t=${transcript.timestamp}" target="_blank">
-            ${formatTimestamp(transcript.timestamp)}
-          </a></p>
-          <p>${highlight(transcript.content, keyword)}</p>
-        `;
-        resultsDiv.appendChild(div);
-      });
-    }
+    // Sort dates chronologically
+    allDates.sort((a, b) => new Date(a) - new Date(b));
+
+    // Create the results HTML
+    resultsDiv.innerHTML = `
+        <div class="results-container">
+            <h3>Found matches in ${allDates.length} recording(s):</h3>
+            <div class="dates-list">
+                ${allDates.map(date => `
+                    <div class="date-item">
+                        ${formatDate(date)}
+                    </div>
+                `).join('')}
+            </div>
+        </div>
+    `;
+
+    // Add styles for the simple date display
+    const style = document.createElement('style');
+    style.textContent = `
+        .results-container {
+            padding: 15px;
+        }
+        .dates-list {
+            margin-top: 10px;
+        }
+        .date-item {
+            padding: 10px;
+            margin: 5px 0;
+            background-color: #f8f9fa;
+            border-left: 3px solid #2196F3;
+            border-radius: 4px;
+        }
+        .no-results {
+            color: #666;
+            text-align: center;
+            padding: 20px;
+        }
+    `;
+    document.head.appendChild(style);
   }
+
+  // Add styles for the new date-based organization
+  const style = document.createElement('style');
+  style.textContent = `
+    .date-section {
+        margin-bottom: 20px;
+        padding: 15px;
+        background-color: #f8f9fa;
+        border-radius: 8px;
+    }
+    
+    .date-header {
+        color: #2196F3;
+        margin-bottom: 15px;
+        padding-bottom: 5px;
+        border-bottom: 2px solid #e0e0e0;
+    }
+    
+    .slides-section, .transcripts-section {
+        margin: 10px 0;
+        padding: 10px;
+        background-color: white;
+        border-radius: 4px;
+    }
+    
+    .result-item {
+        margin: 10px 0;
+        padding: 10px;
+        border-left: 3px solid #2196F3;
+        background-color: #fff;
+    }
+    
+    .result-item a {
+        color: #2196F3;
+        text-decoration: none;
+        font-weight: bold;
+    }
+    
+    .result-item a:hover {
+        text-decoration: underline;
+    }
+    
+    .content {
+        margin: 5px 0;
+        color: #333;
+    }
+    
+    mark {
+        background-color: #fff3cd;
+        padding: 2px;
+        border-radius: 2px;
+    }
+  `;
 
   function highlight(content, keyword) {
     const regex = new RegExp(keyword, 'gi');
