@@ -4,10 +4,9 @@
   "version": "1.0",
   "description": "Search through lecture recording transcripts in MyCourses",
   "permissions": [
-    "storage",
-    "activeTab",
     "scripting",
-    "tabs"
+    "tabs",
+    "downloads"
   ],
   "host_permissions": [
     "*://*.brightspace.com/*",
