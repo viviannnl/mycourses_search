@@ -1,3 +1,5 @@
+import { containsWholeWord } from './utils.js';
+
 document.addEventListener('DOMContentLoaded', function() {
   const searchInput = document.getElementById('searchInput');
   const dateInput = document.getElementById('dateInput');

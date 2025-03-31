@@ -1,3 +1,5 @@
+import { parseRecordingDate, waitForTabToClose, findTab } from './utils.js';
+
 // Listen for installation
 chrome.runtime.onInstalled.addListener(() => {
   console.log('Extension installed');
