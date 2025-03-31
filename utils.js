@@ -41,3 +41,14 @@ export function findTab(urlPart, callback) {
   });
 }
 
+export function waitForMessage(expectedAction) {
+  return new Promise((resolve) => {
+      function messageListener(message) {
+          if (message.action === expectedAction) {
+              chrome.runtime.onMessage.removeListener(messageListener);
+              resolve(message);
+          }
+      }
+      chrome.runtime.onMessage.addListener(messageListener);
+  });
+}

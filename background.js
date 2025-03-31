@@ -1,41 +1,55 @@
-import { parseRecordingDate, waitForTabToClose, findTab } from './utils.js';
+import { parseRecordingDate, waitForMessage } from './utils.js';
 
 // Listen for installation
 chrome.runtime.onInstalled.addListener(() => {
-  console.log('Extension installed');
+    console.log('%c Extension Installed ', 'background: #222; color: #bada55');
 });
 
-// Handle tab updates
-chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
-  if (changeInfo.status === 'complete' && tab.url) {
-    // You can add initialization logic here
-    console.log('Tab updated:', tab.url);
-  }
-}); 
-
+// Single message listener for all scraping actions
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-    if (request.action === "scrapePage") {
-        scrapeDataFromTab(request.url, request.page);
-    }
-});
+    console.log('%c Message Received ', 'background: #222; color: #bada55', request);
 
-chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-    if (request.action === "scrapeOnePage") {
-        console.log("In background.js, Scraping one page:", request.url, request.page, request.date);
-        scrapeDataFromTab(request.url, request.page, request.date);
+    switch (request.action) {       
+        case "scrapeOnePage":
+            console.log('%c Scraping One Page ', 'background: #222; color: #bada55', {
+                url: request.url,
+                page: request.page,
+                date: request.date
+            });
+            scrapeDataFromTab(request.url, request.page, request.date);
+            break;
     }
+    console.log("Done scraping");
+    chrome.runtime.sendMessage({
+        action: "backgroundScrapeDone"
+    });
+    sendResponse({
+        action: "backgroundScrapeDone"
+    });
+    return true; // Keep the message channel open for async responses
 });
 
 function scrapeDataFromTab(targetUrl, page, date) {
+    console.log("In background.js, Scraping data from tab:", targetUrl, page, date);
     chrome.tabs.query({ url: targetUrl }, (tabs) => {
         if (tabs.length > 0) {
             const tabId = tabs[0].id;
             if (page === "recordings") {
-                injectScraperScriptRecordings(tabId, date);
-            } else {
-                injectScraperScriptContent(tabId);
+                if (date) {
+                    injectScraperScriptOneRecording(tabId, date).then(async () => {
+                        // Wait for scraping to complete
+                        await waitForMessage("transcriptFoundForOneDate");
+                        // Now we can safely close the tab
+                        chrome.tabs.remove(tabId);
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                        chrome.tabs.remove(tabId);
+                    });
+                }
             }
         } else {
+            console.log("In background.js, Creating tab:", targetUrl);
             chrome.tabs.create({ url: targetUrl, active: false }, (tab) => {
                 // Send the tab ID to the popup
                 chrome.runtime.sendMessage({ 
@@ -46,21 +60,24 @@ function scrapeDataFromTab(targetUrl, page, date) {
                 chrome.tabs.onUpdated.addListener(function listener(tabId, changeInfo) {
                     if (tabId === tab.id && changeInfo.status === "complete") {
                         chrome.tabs.onUpdated.removeListener(listener);
-                        setTimeout(() => {
+                        //setTimeout(() => {
                             console.log("Waiting for content...");
-                            if (page === "content") {
-                                injectScraperScriptContent(tab.id);
-                            } else if (page === "recordings") {
-                                injectScraperScriptRecordings(tab.id, date).then(() => {
-                                    setTimeout(() => {
-                                        chrome.tabs.remove(tab.id);
-                                    }, 6000);
-                                }).catch(error => {
-                                    console.error('Error:', error);
-                                    chrome.tabs.remove(tab.id);
-                                });
+                            if (page === "recordings") {
+                                if (date) {
+                                    injectScraperScriptOneRecording(tab.id, date)
+                                        .then(async () => {
+                                            // Wait for scraping to complete
+                                            await waitForMessage("ScraperDone");
+                                            // Now we can safely close the tab
+                                            //chrome.tabs.remove(tab.id);
+                                        })
+                                        .catch(error => {
+                                            console.error('Error:', error);
+                                            //chrome.tabs.remove(tab.id);
+                                        });
+                                }
                             }
-                        }, 6000);
+                        //}, 6000);
                     }
                 });
             });
@@ -68,27 +85,8 @@ function scrapeDataFromTab(targetUrl, page, date) {
     });
 }
 
-function parseRecordingDate(dateStr) {
-    const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-    const [year, month, day] = dateStr.split("-").map(Number);
-    
-    // Get the month abbreviation
-    const monthAbbr = months[month - 1];
-
-    // Function to get ordinal suffix (st, nd, rd, th)
-    const getOrdinal = (num) => {
-        if (num >= 11 && num <= 13) return "th";
-        const lastDigit = num % 10;
-        return lastDigit === 1 ? "st" :
-               lastDigit === 2 ? "nd" :
-               lastDigit === 3 ? "rd" : "th";
-    };
-
-    return `${monthAbbr} ${day}${getOrdinal(day)}`;
-}
-
-async function injectScraperScriptRecordings(tabId, targetDate) {
-    //console.log("In background.js:injectScraperScriptRecordings, Injecting scraper script for recordings:", tabId, targetDate);
+async function injectScraperScriptOneRecording(tabId, targetDate) {
+    console.log("In background.js:injectScraperScriptRecordings, Injecting scraper script for recordings:", tabId, targetDate);
     chrome.scripting.executeScript({
         target: { 
           tabId: tabId,
@@ -96,7 +94,7 @@ async function injectScraperScriptRecordings(tabId, targetDate) {
         },
         args: [parseRecordingDate(targetDate).trim()],
         func: async (targetDate) => {
-            //console.log("Injected into:", document.location.href);
+            console.log("Injected into:", document.location.href);
             
             // Helper function to wait for element to appear
             const waitForElement = async (selector, timeout = 5000) => {
@@ -113,8 +111,11 @@ async function injectScraperScriptRecordings(tabId, targetDate) {
 
             if (document.location.href.includes("lrs")) {
                 //console.log("In background.js, Scraping recordings page:", document.location.href);
-                const navigationContainer = document.body.querySelector('.v-navigation-drawer__content');
-                const cardDivs = document.querySelectorAll('.layout.column > .pa-1.ma-2.v-card.v-sheet.theme--light.elevation-6');
+                //const videoContainer = document.body.querySelectorAll('.v-navigation-drawer__content')[0];
+                const videoContainer = await waitForElement('.v-navigation-drawer__content');
+                await waitForElement('.layout.column > .pa-1.ma-2.v-card.v-sheet.theme--light.elevation-6');
+                const cardDivs = videoContainer.querySelectorAll('.layout.column > .pa-1.ma-2.v-card.v-sheet.theme--light.elevation-6');
+                //console.log("In background.js, Found", cardDivs.length, "recordings");
                 
                 for (let i = 0; i < cardDivs.length; i++) {
                     try {
@@ -147,7 +148,7 @@ async function injectScraperScriptRecordings(tabId, targetDate) {
                                 break;
                             }
                         }
-                        await new Promise(resolve => setTimeout(resolve, 2000));
+                        //await new Promise(resolve => setTimeout(resolve, 2000));
                         
                         let transcript = [];
                         const transcriptContainer = document.querySelectorAll('.v-navigation-drawer__content')[1];
@@ -184,36 +185,10 @@ async function injectScraperScriptRecordings(tabId, targetDate) {
                         date: targetDate
                     });
                 }
+                chrome.runtime.sendMessage({
+                    action: "ScraperDone"
+                });
             }
         }
     });
-}
-
-function injectScraperScriptContent(tabId) {
-    chrome.scripting.executeScript({
-        target: { tabId: tabId },
-        func: scrapeContent
-    });
-}
-
-function scrapeContent() {
-    //const data = [...document.querySelectorAll(".navigation-item")].map(el => el.innerText);
-    const iframe = document.querySelector('iframe');
-    // for content page
-    const navigationContainer = iframe.contentDocument.querySelector('.navigation-tree');
-    console.log(navigationContainer);
-
-    // Send data back to the background script
-    //chrome.runtime.sendMessage({ action: "scrapedData", data });
-}
-  /*
-  chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-    if (request.action === "scrapedData") {
-      console.log("Received scraped data:", request.data);
-    }
-  });
-  */
-
-function scrapeRecordings() {
-
 }

@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "Slides & Recordings Search",
+  "name": "MyCourses Transcript Search",
   "version": "1.0",
-  "description": "Search through slides and recordings content",
+  "description": "Search through lecture recording transcripts in MyCourses",
   "permissions": [
     "storage",
     "activeTab",

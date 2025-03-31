@@ -1,14 +1,13 @@
-# Slides & Recordings Search Extension
+# Recordings Transcript Search Extension
 
-A Chrome extension that allows you to search through slides and recordings content in real-time.
+A Chrome extension that allows you to search through lecture recording transcripts.
 
 ## Features
 
-- Real-time search through slide content
-- Search through recording transcripts
-- Highlighted search results
-- Clickable links to specific slides and video timestamps
-- Debounced search for better performance
+- Search through recording transcripts by date
+- View search results organized by lecture date
+- Real-time search status updates
+- Error handling and feedback
 
 ## Installation
 
@@ -25,11 +24,12 @@ git clone https://github.com/viviannnl/mycourses_search.git
 
 ## Usage
 
-1. Click the extension icon in your Chrome toolbar
+1. Click the extension icon in your Chrome toolbar while on a MyCourses recordings page
 2. Type your search query in the search box
-3. Results will appear automatically as you type:
-   - Slide results show the slide number and matching content
-   - Transcript results show timestamps and matching content
-4. Click on any result to jump to that specific slide or video timestamp
+3. The extension will:
+   - Find all available recording dates
+   - Search through each recording's transcript
+   - Display matches organized by lecture date
+4. Results update in real-time as each recording is processed
 
 ## File Structure
