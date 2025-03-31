@@ -60,24 +60,22 @@ function scrapeDataFromTab(targetUrl, page, date) {
                 chrome.tabs.onUpdated.addListener(function listener(tabId, changeInfo) {
                     if (tabId === tab.id && changeInfo.status === "complete") {
                         chrome.tabs.onUpdated.removeListener(listener);
-                        //setTimeout(() => {
-                            console.log("Waiting for content...");
-                            if (page === "recordings") {
-                                if (date) {
-                                    injectScraperScriptOneRecording(tab.id, date)
-                                        .then(async () => {
-                                            // Wait for scraping to complete
-                                            await waitForMessage("ScraperDone");
-                                            // Now we can safely close the tab
-                                            //chrome.tabs.remove(tab.id);
-                                        })
-                                        .catch(error => {
-                                            console.error('Error:', error);
-                                            //chrome.tabs.remove(tab.id);
-                                        });
-                                }
+                        console.log("Waiting for content...");
+                        if (page === "recordings") {
+                            if (date) {
+                                injectScraperScriptOneRecording(tab.id, date)
+                                    .then(async () => {
+                                        // Wait for scraping to complete
+                                        await waitForMessage("ScraperDone");
+                                        // Now we can safely close the tab
+                                        chrome.tabs.remove(tab.id);
+                                    })
+                                    .catch(error => {
+                                        console.error('Error:', error);
+                                        chrome.tabs.remove(tab.id);
+                                    });
                             }
-                        //}, 6000);
+                        }
                     }
                 });
             });
@@ -110,12 +108,10 @@ async function injectScraperScriptOneRecording(tabId, targetDate) {
             let found = false;
 
             if (document.location.href.includes("lrs")) {
-                //console.log("In background.js, Scraping recordings page:", document.location.href);
-                //const videoContainer = document.body.querySelectorAll('.v-navigation-drawer__content')[0];
                 const videoContainer = await waitForElement('.v-navigation-drawer__content');
                 await waitForElement('.layout.column > .pa-1.ma-2.v-card.v-sheet.theme--light.elevation-6');
                 const cardDivs = videoContainer.querySelectorAll('.layout.column > .pa-1.ma-2.v-card.v-sheet.theme--light.elevation-6');
-                //console.log("In background.js, Found", cardDivs.length, "recordings");
+                console.log("In background.js, Found", cardDivs.length, "recordings");
                 
                 for (let i = 0; i < cardDivs.length; i++) {
                     try {

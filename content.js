@@ -6,9 +6,9 @@ class ContentExtractor {
   }
   navigateToRecordings() {
     // Find the Lecture Recordings tab link
-    const recordingsLink = document.querySelector('div[title="Lecture Recordings"] a.d2l-navigation-ib-item-link');
+    const recordingsLink = document.querySelector('a[href*="/d2l/lp/navbars/"]');
     if (recordingsLink) {
-      //console.log('Found Recordings tab:', recordingsLink.href);
+      console.log('Found Recordings tab:', recordingsLink.href);
       return recordingsLink.href;
     }
     return null;
@@ -16,7 +16,7 @@ class ContentExtractor {
 
   grabOneRecording(date) {
     const recordingsUrl = this.navigateToRecordings();
-    //console.log("In content.js, Navigating to recordings at:", recordingsUrl);
+    console.log("In content.js, Navigating to recordings at:", recordingsUrl);
     if (recordingsUrl) {
       chrome.runtime.sendMessage(
         { action: "scrapeOnePage", url: recordingsUrl, page: "recordings", date: date },
